@@ -42,8 +42,8 @@ services:
     environment:
       AI_SERVICE_HOST: 0.0.0.0
       AI_SERVICE_PORT: "8090"
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:latest}
       CHROMA_PATH: /data/chroma
       RESEARCH_DATA_DIR: /app/data
     ports:

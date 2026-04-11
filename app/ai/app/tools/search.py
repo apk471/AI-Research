@@ -1,12 +1,59 @@
 from __future__ import annotations
 
 from typing import List
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 
 from app.schemas import EvidenceItem
+
+ALLOWED_DOMAIN_HINTS = {
+    "nih.gov",
+    "ncbi.nlm.nih.gov",
+    "pubmed.ncbi.nlm.nih.gov",
+    "who.int",
+    "nature.com",
+    "thelancet.com",
+    "nejm.org",
+    "jama.com",
+    "bmj.com",
+    "sciencedirect.com",
+    "healthcareitnews.com",
+    "statnews.com",
+    "healthaffairs.org",
+    "mayoclinic.org",
+    "clevelandclinic.org",
+    "medrxiv.org",
+    "arxiv.org",
+}
+
+BLOCKED_DOMAIN_HINTS = {
+    "baidu.com",
+    "wordreference.com",
+    "dictionary.com",
+    "wiktionary.org",
+    "quora.com",
+    "reddit.com",
+    "pinterest.com",
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
+}
+
+REQUIRED_TOPIC_TERMS = {
+    "ai",
+    "artificial intelligence",
+    "machine learning",
+    "healthcare",
+    "health care",
+    "medical",
+    "clinical",
+    "hospital",
+    "diagnostic",
+    "patient",
+}
 
 
 async def search_web(query: str, limit: int = 5) -> List[EvidenceItem]:
@@ -21,20 +68,33 @@ async def search_web(query: str, limit: int = 5) -> List[EvidenceItem]:
         url = result.get("href") or result.get("url")
         if not url:
             continue
+
+        title = result.get("title") or url
         snippet = result.get("body") or result.get("snippet") or ""
+        if not is_candidate_relevant(query=query, title=title, snippet=snippet, url=url):
+            continue
+
         content = await scrape_article(url)
+        if not is_candidate_relevant(query=query, title=title, snippet=content or snippet, url=url):
+            continue
+
+        score = relevance_score(query=query, title=title, snippet=content or snippet, url=url)
+        if score < 0.55:
+            continue
+
         items.append(
             EvidenceItem(
-                title=result.get("title") or url,
+                title=title,
                 url=url,
                 snippet=(content or snippet)[:1000],
                 source_type="web",
                 published_at=None,
-                score=0.7,
+                score=score,
             )
         )
 
-    return items
+    items.sort(key=lambda item: item.score, reverse=True)
+    return items[:limit]
 
 
 async def scrape_article(url: str) -> str:
@@ -51,3 +111,41 @@ async def scrape_article(url: str) -> str:
 
     text = " ".join(soup.stripped_strings)
     return text[:4000]
+
+
+def is_candidate_relevant(query: str, title: str, snippet: str, url: str) -> bool:
+    normalized_title = title.lower()
+    normalized_snippet = snippet.lower()
+    normalized_query = query.lower()
+    host = (urlparse(url).hostname or "").lower()
+    combined = " ".join([normalized_title, normalized_snippet, normalized_query, host])
+
+    if any(blocked in host for blocked in BLOCKED_DOMAIN_HINTS):
+        return False
+
+    query_terms = [term for term in normalized_query.split() if len(term) > 3]
+    query_overlap = sum(1 for term in query_terms if term in combined)
+    topic_overlap = sum(1 for term in REQUIRED_TOPIC_TERMS if term in combined)
+    trusted_domain = any(allowed in host for allowed in ALLOWED_DOMAIN_HINTS)
+
+    if trusted_domain and topic_overlap >= 1:
+        return True
+
+    return topic_overlap >= 2 and query_overlap >= 2
+
+
+def relevance_score(query: str, title: str, snippet: str, url: str) -> float:
+    normalized_title = title.lower()
+    normalized_snippet = snippet.lower()
+    normalized_query = query.lower()
+    host = (urlparse(url).hostname or "").lower()
+    combined = " ".join([normalized_title, normalized_snippet, normalized_query, host])
+
+    query_terms = [term for term in normalized_query.split() if len(term) > 3]
+    query_overlap = sum(1 for term in query_terms if term in combined)
+    topic_overlap = sum(1 for term in REQUIRED_TOPIC_TERMS if term in combined)
+    trusted_domain_bonus = 0.2 if any(allowed in host for allowed in ALLOWED_DOMAIN_HINTS) else 0.0
+    title_bonus = 0.1 if "health" in normalized_title or "medical" in normalized_title else 0.0
+
+    score = min(1.0, 0.15 * query_overlap + 0.12 * topic_overlap + trusted_domain_bonus + title_bonus)
+    return round(score, 2)

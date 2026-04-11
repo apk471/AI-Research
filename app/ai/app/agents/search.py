@@ -15,4 +15,5 @@ class SearchAgent:
                     continue
                 seen_urls.add(item.url)
                 evidence.append(item)
+        evidence.sort(key=lambda item: item.score, reverse=True)
         return evidence[:8]
