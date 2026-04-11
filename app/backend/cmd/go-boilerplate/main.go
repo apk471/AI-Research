@@ -19,9 +19,10 @@ import (
 )
 
 const DefaultContextTimeout = 30
+
 func main() {
-	
-	cfg , err := config.LoadConfig()
+
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		panic("failed to load config: " + err.Error())
 	}
@@ -37,7 +38,7 @@ func main() {
 		}
 	}
 
-	srv, err := server.New(cfg , &log , loggerService)
+	srv, err := server.New(cfg, &log, loggerService)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize server")
 	}
@@ -49,7 +50,7 @@ func main() {
 	}
 	handlers := handler.NewHandlers(srv, services)
 
-	r := router.NewRouter(srv , handlers , services)
+	r := router.NewRouter(srv, handlers, services)
 
 	srv.SetupHTTPServer(r)
 
