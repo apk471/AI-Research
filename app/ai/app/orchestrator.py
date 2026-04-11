@@ -45,15 +45,33 @@ class ResearchOrchestrator:
     async def stream(self, request: ResearchRequest) -> AsyncIterator[StreamEvent]:
         try:
             yield self._event("planning_started", "running", "Planner agent is building execution plan", "planner")
-            plan = await self.planner.run(request.query)
+            planner_result = await self.planner.run(request.query)
+            plan = planner_result.output
 
             yield self._event(
                 "planning_completed",
                 "running",
                 "Plan ready",
                 "planner",
-                data={"steps": [step.step for step in plan.steps], "focus_areas": plan.focus_areas},
+                data={
+                    "steps": [step.step for step in plan.steps],
+                    "focus_areas": plan.focus_areas,
+                    "llm_model": planner_result.model,
+                    "used_fallback": planner_result.used_fallback,
+                },
             )
+
+            if planner_result.used_fallback:
+                yield self._event(
+                    "planner_warning",
+                    "running",
+                    "Planner fell back to default plan because the local model response was unavailable or invalid",
+                    "planner",
+                    data={
+                        "error": planner_result.error,
+                        "llm_model": planner_result.model,
+                    },
+                )
 
             yield self._event("search_started", "running", "Search and RAG agents started", "orchestrator")
             search_results, rag_results = await asyncio.gather(
@@ -66,8 +84,21 @@ class ResearchOrchestrator:
                 "running",
                 "Evidence collection completed",
                 "search",
-                data={"web_results": len(search_results), "rag_results": len(rag_results)},
+                data={
+                    "web_results": len(search_results),
+                    "rag_results": len(rag_results),
+                    "minimum_web_results_met": len(search_results) >= 2,
+                },
             )
+
+            if len(search_results) == 0:
+                yield self._event(
+                    "search_warning",
+                    "running",
+                    "No relevant web sources were found; the run will rely on local RAG evidence and should be treated as partial",
+                    "search",
+                    data={"query": request.query},
+                )
 
             yield self._event("summarizing", "running", "Summarizer agent is drafting sections", "summarizer")
             sections = await self.summarizer.run(request.query, plan, search_results, rag_results)
@@ -78,13 +109,19 @@ class ResearchOrchestrator:
             yield self._event("formatting", "running", "Formatter agent is producing the final report", "formatter")
             report = await self.formatter.run(request.query, sections, search_results + rag_results, confidence)
 
-            final_status = "completed" if report.sources else "partial"
+            web_source_count = sum(1 for source in report.sources if source.source_type == "web")
+            sufficiently_supported = len(report.sources) >= 3 and web_source_count >= 2
+            final_status = "completed" if sufficiently_supported else "partial"
             yield self._event(
                 "completed",
                 final_status,
-                "Research report completed",
+                "Research report completed" if sufficiently_supported else "Research report completed with limited evidence",
                 "formatter",
-                data={"source_count": len(report.sources)},
+                data={
+                    "source_count": len(report.sources),
+                    "web_source_count": web_source_count,
+                    "sufficiently_supported": sufficiently_supported,
+                },
                 report=report,
             )
         except Exception as exc:
