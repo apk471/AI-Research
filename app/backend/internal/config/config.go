@@ -71,7 +71,12 @@ func LoadConfig() (*Config, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("BOILERPLATE_", ".", func(s string) string {
-		return strings.ToLower(strings.TrimPrefix(s, "BOILERPLATE_"))
+		key := strings.ToLower(strings.TrimPrefix(s, "BOILERPLATE_"))
+		parts := strings.SplitN(key, "_", 2)
+		if len(parts) == 1 {
+			return parts[0]
+		}
+		return parts[0] + "." + parts[1]
 	}), nil)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("could not load initial env variables")
