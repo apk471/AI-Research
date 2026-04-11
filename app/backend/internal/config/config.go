@@ -15,9 +15,10 @@ type Config struct {
 	Primary       Primary              `koanf:"primary" validate:"required"`
 	Server        ServerConfig         `koanf:"server" validate:"required"`
 	Database      DatabaseConfig       `koanf:"database" validate:"required"`
-	Auth          AuthConfig           `koanf:"auth" validate:"required"`
+	Auth          AuthConfig           `koanf:"auth"`
 	Redis         RedisConfig          `koanf:"redis" validate:"required"`
-	Integration   IntegrationConfig    `koanf:"integration" validate:"required"`
+	Integration   IntegrationConfig    `koanf:"integration"`
+	AI            AIConfig             `koanf:"ai" validate:"required"`
 	Observability *ObservabilityConfig `koanf:"observability"`
 }
 
@@ -50,11 +51,18 @@ type RedisConfig struct {
 }
 
 type IntegrationConfig struct {
-	ResendAPIKey string `koanf:"resend_api_key" validate:"required"`
+	ResendAPIKey string `koanf:"resend_api_key"`
 }
 
 type AuthConfig struct {
-	SecretKey string `koanf:"secret_key" validate:"required"`
+	SecretKey string `koanf:"secret_key"`
+}
+
+type AIConfig struct {
+	BaseURL           string `koanf:"base_url" validate:"required,url"`
+	RequestTimeoutSec int    `koanf:"request_timeout_sec" validate:"required,min=1"`
+	StreamIdleSec     int    `koanf:"stream_idle_sec" validate:"required,min=1"`
+	SessionTTLHours   int    `koanf:"session_ttl_hours" validate:"required,min=1"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -89,7 +97,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Override service name and environment from primary config
-	mainConfig.Observability.ServiceName = "boilerplate"
+	mainConfig.Observability.ServiceName = "ai-research-backend"
 	mainConfig.Observability.Environment = mainConfig.Primary.Env
 
 	// Validate observability config
