@@ -12,18 +12,41 @@ class FormatterAgent:
         confidence: Confidence,
     ) -> ResearchReport:
         unique_sources: dict[str, ReportSource] = {}
-        for item in evidence:
+        for item in sorted(evidence, key=lambda current: current.score, reverse=True):
             unique_sources[item.url] = ReportSource(
                 title=item.title,
                 url=item.url,
                 source_type=item.source_type,
             )
 
-        summary = sections[0].content[:280] if sections else f"Research report for {query}"
+        cleaned_sections = [self._clean_section(section) for section in sections]
+        summary = self._build_summary(cleaned_sections, query)
         return ResearchReport(
             title=f"Research Report: {query}",
             summary=summary,
-            sections=sections,
+            sections=cleaned_sections,
             sources=list(unique_sources.values())[:10],
             confidence=confidence,
         )
+
+    def _clean_section(self, section: ReportSection) -> ReportSection:
+        content = " ".join(section.content.replace("#", " ").split())
+        return ReportSection(
+            heading=section.heading,
+            content=content,
+            citations=list(dict.fromkeys(section.citations)),
+        )
+
+    def _build_summary(self, sections: list[ReportSection], query: str) -> str:
+        if not sections:
+            return f"Research report for {query}"
+
+        summary_parts: list[str] = []
+        for section in sections[:2]:
+            sentence = section.content.split(". ")[0].strip()
+            if sentence and sentence not in summary_parts:
+                summary_parts.append(sentence.rstrip(".") + ".")
+        summary = " ".join(summary_parts).strip()
+        if not summary:
+            return f"Research report for {query}"
+        return summary[:320]

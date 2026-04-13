@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 
 import chromadb
+from chromadb.config import Settings
 
 from app.schemas import EvidenceItem
 
@@ -14,7 +15,10 @@ class RagStore:
     def __init__(self) -> None:
         chroma_path = os.getenv("CHROMA_PATH", "./.chroma")
         self.docs_dir = Path(os.getenv("RESEARCH_DATA_DIR", "./data"))
-        self.client = chromadb.PersistentClient(path=chroma_path)
+        self.client = chromadb.PersistentClient(
+            path=chroma_path,
+            settings=Settings(anonymized_telemetry=False),
+        )
         self.collection = self.client.get_or_create_collection("research_docs")
 
     def seed_if_empty(self) -> None:
