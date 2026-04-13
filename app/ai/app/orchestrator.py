@@ -104,10 +104,11 @@ class ResearchOrchestrator:
             sections = await self.summarizer.run(request.query, plan, search_results, rag_results)
 
             yield self._event("fact_checking", "running", "Validator agent is checking evidence support", "validator")
-            sections, confidence = await self.validator.run(sections, len(search_results) + len(rag_results))
+            evidence = search_results + rag_results
+            sections, confidence = await self.validator.run(sections, evidence)
 
             yield self._event("formatting", "running", "Formatter agent is producing the final report", "formatter")
-            report = await self.formatter.run(request.query, sections, search_results + rag_results, confidence)
+            report = await self.formatter.run(request.query, sections, evidence, confidence)
 
             web_source_count = sum(1 for source in report.sources if source.source_type == "web")
             sufficiently_supported = len(report.sources) >= 3 and web_source_count >= 2
@@ -121,6 +122,7 @@ class ResearchOrchestrator:
                     "source_count": len(report.sources),
                     "web_source_count": web_source_count,
                     "sufficiently_supported": sufficiently_supported,
+                    "confidence_overall": report.confidence.overall,
                 },
                 report=report,
             )

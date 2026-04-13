@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import List
+import re
+from typing import Iterable, List
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from app.schemas import EvidenceItem
 
@@ -60,7 +61,7 @@ async def search_web(query: str, limit: int = 5) -> List[EvidenceItem]:
     items: List[EvidenceItem] = []
     try:
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=limit))
+            results = list(ddgs.text(query, max_results=limit * 3))
     except Exception:
         results = []
 
@@ -75,10 +76,11 @@ async def search_web(query: str, limit: int = 5) -> List[EvidenceItem]:
             continue
 
         content = await scrape_article(url)
-        if not is_candidate_relevant(query=query, title=title, snippet=content or snippet, url=url):
+        normalized_content = normalize_text(content or snippet)
+        if not is_candidate_relevant(query=query, title=title, snippet=normalized_content, url=url):
             continue
 
-        score = relevance_score(query=query, title=title, snippet=content or snippet, url=url)
+        score = relevance_score(query=query, title=title, snippet=normalized_content, url=url)
         if score < 0.55:
             continue
 
@@ -86,7 +88,7 @@ async def search_web(query: str, limit: int = 5) -> List[EvidenceItem]:
             EvidenceItem(
                 title=title,
                 url=url,
-                snippet=(content or snippet)[:1000],
+                snippet=normalized_content[:1000],
                 source_type="web",
                 published_at=None,
                 score=score,
@@ -114,8 +116,8 @@ async def scrape_article(url: str) -> str:
 
 
 def is_candidate_relevant(query: str, title: str, snippet: str, url: str) -> bool:
-    normalized_title = title.lower()
-    normalized_snippet = snippet.lower()
+    normalized_title = normalize_text(title).lower()
+    normalized_snippet = normalize_text(snippet).lower()
     normalized_query = query.lower()
     host = (urlparse(url).hostname or "").lower()
     combined = " ".join([normalized_title, normalized_snippet, normalized_query, host])
@@ -135,8 +137,8 @@ def is_candidate_relevant(query: str, title: str, snippet: str, url: str) -> boo
 
 
 def relevance_score(query: str, title: str, snippet: str, url: str) -> float:
-    normalized_title = title.lower()
-    normalized_snippet = snippet.lower()
+    normalized_title = normalize_text(title).lower()
+    normalized_snippet = normalize_text(snippet).lower()
     normalized_query = query.lower()
     host = (urlparse(url).hostname or "").lower()
     combined = " ".join([normalized_title, normalized_snippet, normalized_query, host])
@@ -149,3 +151,24 @@ def relevance_score(query: str, title: str, snippet: str, url: str) -> float:
 
     score = min(1.0, 0.15 * query_overlap + 0.12 * topic_overlap + trusted_domain_bonus + title_bonus)
     return round(score, 2)
+
+
+def normalize_text(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text)
+    return cleaned.strip()
+
+
+def build_search_variants(query: str, focus_areas: Iterable[str]) -> list[str]:
+    variants = [query, f"{query} recent research", f"{query} statistics", f"{query} study OR report"]
+    for focus in focus_areas:
+        variants.append(f"{query} {focus}")
+        variants.append(f"{query} {focus} recent statistics")
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for variant in variants:
+        key = variant.lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(variant)
+    return deduped

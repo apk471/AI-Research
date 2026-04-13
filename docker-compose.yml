@@ -46,6 +46,7 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:latest}
       CHROMA_PATH: /data/chroma
       RESEARCH_DATA_DIR: /app/data
+      ANONYMIZED_TELEMETRY: "FALSE"
     ports:
       - "8090:8090"
     volumes:
