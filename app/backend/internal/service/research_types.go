@@ -1,6 +1,6 @@
 package service
 
-import "github.com/apk471/go-boilerplate/internal/model"
+import "github.com/ayush-amin/go-boilerplate/internal/model"
 
 type AIStreamEvent struct {
 	Type      string                `json:"type"`
