@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apk471/go-boilerplate/internal/config"
-	"github.com/apk471/go-boilerplate/internal/errs"
-	"github.com/apk471/go-boilerplate/internal/model"
-	"github.com/apk471/go-boilerplate/internal/repository"
-	"github.com/apk471/go-boilerplate/internal/server"
+	"github.com/ayush-amin/go-boilerplate/internal/config"
+	"github.com/ayush-amin/go-boilerplate/internal/errs"
+	"github.com/ayush-amin/go-boilerplate/internal/model"
+	"github.com/ayush-amin/go-boilerplate/internal/repository"
+	"github.com/ayush-amin/go-boilerplate/internal/server"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
